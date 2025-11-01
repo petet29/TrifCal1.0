@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { CalendarEvent } from '@/types/calendar'
-import { format, startOfWeek, endOfWeek, eachDayOfInterval, isSameDay, isToday } from 'date-fns'
+import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isToday } from 'date-fns'
 import { ChevronLeft, ChevronRight, Plus, Settings } from 'lucide-react'
 
 interface CalendarViewProps {
@@ -11,6 +11,7 @@ interface CalendarViewProps {
   onEventClick?: (event: CalendarEvent) => void
   onAddEvent?: () => void
   onSettingsClick?: () => void
+  onMonthChange?: (date: Date) => void
 }
 
 export default function CalendarView({
@@ -18,7 +19,8 @@ export default function CalendarView({
   loading = false,
   onEventClick,
   onAddEvent,
-  onSettingsClick
+  onSettingsClick,
+  onMonthChange
 }: CalendarViewProps) {
   const [currentDate, setCurrentDate] = useState(new Date())
   const [viewType, setViewType] = useState<'month' | 'week' | 'day'>('month')
@@ -27,6 +29,8 @@ export default function CalendarView({
     const newDate = new Date(currentDate)
     if (viewType === 'month') {
       newDate.setMonth(newDate.getMonth() + (direction === 'next' ? 1 : -1))
+      // Notify parent component to refetch events for the new month
+      onMonthChange?.(newDate)
     } else if (viewType === 'week') {
       newDate.setDate(newDate.getDate() + (direction === 'next' ? 7 : -7))
     } else {
@@ -40,9 +44,17 @@ export default function CalendarView({
   }
 
   const renderMonthView = () => {
-    const start = startOfWeek(currentDate, { weekStartsOn: 1 })
-    const end = endOfWeek(currentDate, { weekStartsOn: 1 })
-    const days = eachDayOfInterval({ start, end })
+    // Get the start and end of the current month
+    const monthStart = startOfMonth(currentDate)
+    const monthEnd = endOfMonth(currentDate)
+    
+    // Get the start of the week for the first day of the month
+    const calendarStart = startOfWeek(monthStart, { weekStartsOn: 1 })
+    // Get the end of the week for the last day of the month
+    const calendarEnd = endOfWeek(monthEnd, { weekStartsOn: 1 })
+    
+    // Generate all days in the calendar grid (includes partial weeks at start/end)
+    const days = eachDayOfInterval({ start: calendarStart, end: calendarEnd })
 
     const getEventColor = (event: CalendarEvent) => {
       return event.source?.color || '#3b82f6'
@@ -51,8 +63,9 @@ export default function CalendarView({
     return (
       <div className="grid grid-cols-7 gap-px bg-gray-200 border border-gray-200 rounded-lg overflow-hidden">
         {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(day => (
-          <div key={day} className="p-2 text-center text-xs font-semibold text-gray-600 bg-gray-50">
-            {day}
+          <div key={day} className="p-1 sm:p-2 text-center text-[10px] sm:text-xs font-semibold text-gray-600 bg-gray-50">
+            <span className="hidden sm:inline">{day}</span>
+            <span className="sm:hidden">{day.substring(0, 1)}</span>
           </div>
         ))}
         {days.map(day => {
@@ -63,42 +76,37 @@ export default function CalendarView({
           return (
             <div
               key={day.toISOString()}
-              className={`min-h-[120px] p-1.5 bg-white ${
+              className={`min-h-[80px] sm:min-h-[100px] md:min-h-[120px] p-1 sm:p-1.5 bg-white ${
                 isCurrentDay ? 'bg-blue-50 ring-2 ring-blue-400 ring-inset' : ''
-              } ${!isCurrentMonth ? 'bg-gray-50' : ''} transition-colors hover:bg-gray-50`}
+              } ${!isCurrentMonth ? 'bg-gray-50' : ''} transition-colors active:bg-gray-50`}
             >
-              <div className={`text-sm font-semibold mb-1 ${
+              <div className={`text-xs sm:text-sm font-semibold mb-0.5 sm:mb-1 ${
                 isCurrentDay 
-                  ? 'text-blue-600 bg-blue-100 rounded-full w-6 h-6 flex items-center justify-center' 
+                  ? 'text-blue-600 bg-blue-100 rounded-full w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center text-xs sm:text-sm' 
                   : isCurrentMonth 
                     ? 'text-gray-900' 
                     : 'text-gray-400'
               }`}>
                 {format(day, 'd')}
               </div>
-              <div className="space-y-0.5 mt-1">
-                {dayEvents.slice(0, 3).map(event => (
+              <div className="space-y-0.5 mt-0.5 sm:mt-1">
+                {dayEvents.slice(0, 2).map(event => (
                   <div
                     key={event.id}
                     onClick={() => onEventClick?.(event)}
                     style={{ 
                       backgroundColor: getEventColor(event) + '20',
                       borderLeftColor: getEventColor(event),
-                      borderLeftWidth: '3px'
+                      borderLeftWidth: '2px'
                     }}
-                    className="text-xs p-1.5 rounded text-gray-800 cursor-pointer hover:opacity-80 truncate border-l-2 transition-all"
+                    className="text-[10px] sm:text-xs p-1 sm:p-1.5 rounded text-gray-800 cursor-pointer active:opacity-80 truncate border-l-2 transition-all touch-manipulation min-h-[24px] flex items-center"
                   >
-                    <div className="font-medium truncate">{event.title}</div>
-                    {!event.allDay && (
-                      <div className="text-xs text-gray-500 mt-0.5">
-                        {format(event.start, 'h:mm a')}
-                      </div>
-                    )}
+                    <div className="font-medium truncate flex-1">{event.title}</div>
                   </div>
                 ))}
-                {dayEvents.length > 3 && (
-                  <div className="text-xs text-gray-500 font-medium pt-1">
-                    +{dayEvents.length - 3} more
+                {dayEvents.length > 2 && (
+                  <div className="text-[10px] sm:text-xs text-gray-500 font-medium pt-0.5 sm:pt-1">
+                    +{dayEvents.length - 2} more
                   </div>
                 )}
               </div>
@@ -203,23 +211,29 @@ export default function CalendarView({
           <div className="flex items-center space-x-2">
             <button
               onClick={() => navigateDate('prev')}
-              className="p-2 hover:bg-white/80 rounded-lg transition-colors"
+              className="p-2 sm:p-2 hover:bg-white/80 active:bg-white/90 rounded-lg transition-colors touch-manipulation min-w-[44px] min-h-[44px] flex items-center justify-center"
               aria-label="Previous"
             >
-              <ChevronLeft className="w-5 h-5 text-gray-700" />
+              <ChevronLeft className="w-5 h-5 sm:w-5 sm:h-5 text-gray-700" />
             </button>
             <button
-              onClick={() => setCurrentDate(new Date())}
-              className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white rounded-lg hover:bg-gray-50 border border-gray-200"
+              onClick={() => {
+                const today = new Date()
+                setCurrentDate(today)
+                if (viewType === 'month') {
+                  onMonthChange?.(today)
+                }
+              }}
+              className="px-3 py-1.5 sm:px-3 sm:py-1.5 text-xs sm:text-sm font-medium text-gray-700 bg-white rounded-lg active:bg-gray-50 hover:bg-gray-50 border border-gray-200 touch-manipulation min-h-[36px]"
             >
               Today
             </button>
             <button
               onClick={() => navigateDate('next')}
-              className="p-2 hover:bg-white/80 rounded-lg transition-colors"
+              className="p-2 sm:p-2 hover:bg-white/80 active:bg-white/90 rounded-lg transition-colors touch-manipulation min-w-[44px] min-h-[44px] flex items-center justify-center"
               aria-label="Next"
             >
-              <ChevronRight className="w-5 h-5 text-gray-700" />
+              <ChevronRight className="w-5 h-5 sm:w-5 sm:h-5 text-gray-700" />
             </button>
           </div>
           <div>
@@ -251,7 +265,7 @@ export default function CalendarView({
           
           <button
             onClick={onAddEvent}
-            className="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow-md hover:shadow-lg transition-all flex items-center justify-center"
+            className="p-2 sm:p-2 bg-blue-600 text-white rounded-lg active:bg-blue-700 hover:bg-blue-700 shadow-md hover:shadow-lg transition-all flex items-center justify-center touch-manipulation min-w-[44px] min-h-[44px]"
             aria-label="Add event"
           >
             <Plus className="w-5 h-5" />
@@ -259,7 +273,7 @@ export default function CalendarView({
           
           <button
             onClick={onSettingsClick}
-            className="p-2 hover:bg-white/80 rounded-lg transition-colors"
+            className="p-2 sm:p-2 hover:bg-white/80 active:bg-white/90 rounded-lg transition-colors touch-manipulation min-w-[44px] min-h-[44px] flex items-center justify-center"
             aria-label="Settings"
           >
             <Settings className="w-5 h-5 text-gray-600" />
@@ -268,7 +282,7 @@ export default function CalendarView({
       </div>
 
       {/* Calendar Content */}
-      <div className="p-4">
+      <div className="p-2 sm:p-4">
         {loading ? (
           <div className="flex items-center justify-center py-12">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>

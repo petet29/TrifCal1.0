@@ -8,23 +8,47 @@ export default function Home() {
   const [events, setEvents] = useState<CalendarEvent[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [currentMonth, setCurrentMonth] = useState(new Date())
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null)
 
   useEffect(() => {
-    fetchGoogleCalendarEvents()
-  }, [])
+    checkAuthStatus()
+    fetchGoogleCalendarEvents(currentMonth)
+  }, [currentMonth])
 
-  const fetchGoogleCalendarEvents = async () => {
+  const checkAuthStatus = async () => {
+    try {
+      const response = await fetch('/api/auth/session')
+      const data = await response.json()
+      setIsAuthenticated(data.authenticated || false)
+    } catch (err) {
+      console.error('Error checking auth status:', err)
+      setIsAuthenticated(false)
+    }
+  }
+
+  const fetchGoogleCalendarEvents = async (month: Date = new Date()) => {
     try {
       setLoading(true)
       setError(null)
       
-      const response = await fetch('/api/calendar/google')
+      // Fetch events for a wider range: 6 months before to 6 months after the specified month
+      const firstDay = new Date(month.getFullYear(), month.getMonth() - 6, 1)
+      const lastDay = new Date(month.getFullYear(), month.getMonth() + 7, 0, 23, 59, 59)
+      
+      const timeMin = firstDay.toISOString()
+      const timeMax = lastDay.toISOString()
+      
+      // Fetch from ALL calendars, not just primary
+      const response = await fetch(
+        `/api/calendar/google/all-calendars?timeMin=${encodeURIComponent(timeMin)}&timeMax=${encodeURIComponent(timeMax)}`
+      )
       const data = await response.json()
       
       if (response.ok) {
         setEvents(data.events || [])
         if (data.events && data.events.length === 0) {
-          // Show helpful message if no events but connection works
+          setError('No events found in your Google Calendar for this month')
         }
       } else if (response.status === 401) {
         setError('Please sign in with Google to view your calendar')
@@ -46,7 +70,9 @@ export default function Home() {
   }
 
   const handleSignIn = async () => {
-    window.location.href = '/api/auth/signin/google'
+    // NextAuth v5: Use relative URL (works better with routing)
+    // After redirect back, checkAuthStatus will run and update the UI
+    window.location.href = '/api/auth/signin/google?callbackUrl=/'
   }
 
   const getMockEvents = (): CalendarEvent[] => [
@@ -138,19 +164,40 @@ export default function Home() {
                 <span className="text-xs text-gray-500 hidden sm:inline">Family Calendar</span>
               </div>
             </div>
-            <div className="flex items-center space-x-3">
-              <button 
-                onClick={handleSignIn}
-                className="px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-blue-600 to-indigo-600 rounded-lg hover:from-blue-700 hover:to-indigo-700 shadow-md hover:shadow-lg transition-all flex items-center space-x-2"
-              >
-                <svg className="w-4 h-4" viewBox="0 0 24 24">
-                  <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                  <path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                  <path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-                  <path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-                </svg>
-                <span>Sign In with Google</span>
-              </button>
+            <div className="flex items-center space-x-2 sm:space-x-3">
+              {isAuthenticated ? (
+                <div className="flex items-center space-x-2">
+                  <span className="text-xs sm:text-sm text-gray-600 hidden sm:inline">
+                    Signed in
+                  </span>
+                  <button 
+                    onClick={async () => {
+                      const response = await fetch('/api/auth/signout', { method: 'POST' })
+                      if (response.ok) {
+                        setIsAuthenticated(false)
+                        window.location.reload()
+                      }
+                    }}
+                    className="px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg active:bg-gray-50 hover:bg-gray-50 shadow-sm transition-all touch-manipulation min-h-[40px] sm:min-h-[44px]"
+                  >
+                    Sign Out
+                  </button>
+                </div>
+              ) : (
+                <button 
+                  onClick={handleSignIn}
+                  className="px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-white bg-gradient-to-r from-blue-600 to-indigo-600 rounded-lg active:from-blue-700 active:to-indigo-700 hover:from-blue-700 hover:to-indigo-700 shadow-md hover:shadow-lg transition-all flex items-center space-x-1 sm:space-x-2 touch-manipulation min-h-[40px] sm:min-h-[44px]"
+                >
+                  <svg className="w-4 h-4" viewBox="0 0 24 24">
+                    <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                    <path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                    <path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                    <path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                  </svg>
+                  <span className="hidden sm:inline">Sign In with Google</span>
+                  <span className="sm:hidden">Sign In</span>
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -158,9 +205,9 @@ export default function Home() {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="mb-8">
-          <h2 className="text-3xl font-bold text-gray-900 mb-2">Welcome to TrifSync</h2>
-          <p className="text-lg text-gray-600">
+        <div className="mb-6 sm:mb-8">
+          <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">Welcome to TrifSync</h2>
+          <p className="text-base sm:text-lg text-gray-600">
             Your smart family calendar with AI assistant, multi-service integration, and intelligent notifications.
           </p>
         </div>
@@ -172,94 +219,10 @@ export default function Home() {
           onEventClick={handleEventClick}
           onAddEvent={handleAddEvent}
           onSettingsClick={handleSettingsClick}
+          onMonthChange={setCurrentMonth}
         />
 
-        {/* Error Message */}
-        {error && (
-          <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-            <div className="flex">
-              <div className="flex-shrink-0">
-                <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                </svg>
-              </div>
-              <div className="ml-3">
-                <h3 className="text-sm font-medium text-yellow-800">
-                  Calendar Connection Issue
-                </h3>
-                <div className="mt-2 text-sm text-yellow-700">
-                  <p>{error}</p>
-                  <p className="mt-1">Showing sample data. Please check your Apple Calendar configuration.</p>
-                  <div className="mt-3 space-y-2">
-                    <p className="font-medium">Quick Setup Links:</p>
-                    <ul className="space-y-1">
-                      <li>
-                        <a 
-                          href="http://localhost:3000/api/calendar/debug" 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className="text-blue-600 hover:text-blue-800 underline"
-                        >
-                          🔍 Check Configuration Status
-                        </a>
-                      </li>
-                      <li>
-                        <a 
-                          href="http://localhost:3000/api/calendar/test-caldav" 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className="text-blue-600 hover:text-blue-800 underline"
-                        >
-                          🧪 Test CalDAV URLs
-                        </a>
-                      </li>
-                      <li>
-                        <a 
-                          href="https://appleid.apple.com" 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className="text-blue-600 hover:text-blue-800 underline"
-                        >
-                          🍎 Create App-Specific Password
-                        </a>
-                      </li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Success Message - Google Calendar Connected */}
-        {!error && !loading && events.length === 0 && (
-          <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
-            <div className="flex">
-              <div className="flex-shrink-0">
-                <svg className="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                </svg>
-              </div>
-              <div className="ml-3">
-                <h3 className="text-sm font-medium text-green-800">
-                  🎉 Google Calendar Connected Successfully!
-                </h3>
-                <div className="mt-2 text-sm text-green-700">
-                  <p>Your Google Calendar is now synced with TrifSync.</p>
-                  <p className="mt-1">No events found for the current date range. Try:</p>
-                  <ul className="mt-2 list-disc list-inside space-y-1">
-                    <li>Adding events to your Google Calendar</li>
-                    <li>Importing iCal links into Google Calendar (see guide below)</li>
-                    <li>Navigating to a different month</li>
-                    <li>Checking if you have events in other date ranges</li>
-                  </ul>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Authentication Required Message */}
+        {/* Authentication Required Message - Show first if it's a sign-in error */}
         {error && error.includes('sign in') && (
           <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
             <div className="flex">
@@ -323,8 +286,58 @@ export default function Home() {
           </div>
         )}
 
+        {/* Other Error Messages - Only show if NOT a sign-in error */}
+        {error && !error.includes('sign in') && (
+          <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+            <div className="flex">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <h3 className="text-sm font-medium text-yellow-800">
+                  Calendar Connection Issue
+                </h3>
+                <div className="mt-2 text-sm text-yellow-700">
+                  <p>{error}</p>
+                  <p className="mt-1">Showing sample data for now.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Success Message - Google Calendar Connected */}
+        {!error && !loading && events.length === 0 && (
+          <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
+            <div className="flex">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <h3 className="text-sm font-medium text-green-800">
+                  🎉 Google Calendar Connected Successfully!
+                </h3>
+                <div className="mt-2 text-sm text-green-700">
+                  <p>Your Google Calendar is now synced with TrifSync.</p>
+                  <p className="mt-1">No events found for the current date range. Try:</p>
+                  <ul className="mt-2 list-disc list-inside space-y-1">
+                    <li>Adding events to your Google Calendar</li>
+                    <li>Importing iCal links into Google Calendar (see guide below)</li>
+                    <li>Navigating to a different month</li>
+                    <li>Checking if you have events in other date ranges</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Features Preview */}
-        <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-8">
+        <div className="mt-8 sm:mt-12 grid grid-cols-1 md:grid-cols-3 gap-6 sm:gap-8">
           <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
             <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mb-4">
               <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -106,11 +106,12 @@ export class AppleCalendarService {
     const events: CalendarEvent[] = []
     
     // Simple XML parsing for calendar data
-    const calendarDataMatches = xmlData.match(/<C:calendar-data><!\[CDATA\[(.*?)\]\]><\/C:calendar-data>/gs)
+    // Using [\s\S] instead of . with 's' flag for ES2017 compatibility
+    const calendarDataMatches = xmlData.match(/<C:calendar-data><!\[CDATA\[([\s\S]*?)\]\]><\/C:calendar-data>/g)
     
     if (calendarDataMatches) {
       for (const match of calendarDataMatches) {
-        const icalData = match.replace(/<C:calendar-data><!\[CDATA\[(.*?)\]\]><\/C:calendar-data>/s, '$1')
+        const icalData = match.replace(/<C:calendar-data><!\[CDATA\[([\s\S]*?)\]\]><\/C:calendar-data>/, '$1')
         const parsedEvents = this.parseICalData(icalData)
         events.push(...parsedEvents)
       }
@@ -128,13 +129,26 @@ export class AppleCalendarService {
       for (const key in parsedData) {
         const event = parsedData[key]
         if (event.type === 'VEVENT') {
+          // Check if event is all-day by examining the original iCal data or ICAL.Time object
+          // All-day events in iCalendar use DATE instead of DATE-TIME
+          const startDate = event.start ? new Date(event.start) : new Date()
+          const endDate = event.end ? new Date(event.end) : new Date()
+          
+          // An event is all-day if start time is at midnight and has no time component
+          // Check if the original iCal string indicates a DATE value (all-day) vs DATE-TIME
+          const eventKey = key
+          const isAllDay = icalData.includes(`DTSTART;VALUE=DATE:`) || 
+                          icalData.includes(`DTSTART;VALUE=DATE;`) ||
+                          (startDate.getHours() === 0 && startDate.getMinutes() === 0 && 
+                           startDate.getSeconds() === 0 && startDate.getMilliseconds() === 0)
+          
           events.push({
             id: event.uid || crypto.randomUUID(),
             title: event.summary || 'No Title',
             description: event.description || '',
-            start: event.start ? new Date(event.start) : new Date(),
-            end: event.end ? new Date(event.end) : new Date(),
-            allDay: event.start ? !event.start.includes('T') : false,
+            start: startDate,
+            end: endDate,
+            allDay: isAllDay,
             location: event.location || '',
             source: {
               id: 'apple',
