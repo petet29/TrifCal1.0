@@ -1,65 +1,361 @@
-import Image from "next/image";
+'use client'
+
+import { useState, useEffect } from 'react'
+import CalendarView from '@/components/calendar/CalendarView'
+import { CalendarEvent } from '@/types/calendar'
 
 export default function Home() {
+  const [events, setEvents] = useState<CalendarEvent[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    fetchGoogleCalendarEvents()
+  }, [])
+
+  const fetchGoogleCalendarEvents = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      
+      const response = await fetch('/api/calendar/google')
+      const data = await response.json()
+      
+      if (response.ok) {
+        setEvents(data.events || [])
+        if (data.events && data.events.length === 0) {
+          // Show helpful message if no events but connection works
+        }
+      } else if (response.status === 401) {
+        setError('Please sign in with Google to view your calendar')
+        // Fallback to mock data
+        setEvents(getMockEvents())
+      } else {
+        setError(data.error || 'Failed to fetch calendar events')
+        // Fallback to mock data if Google Calendar fails
+        setEvents(getMockEvents())
+      }
+    } catch (err) {
+      console.error('Error fetching calendar events:', err)
+      setError('Failed to connect to calendar service')
+      // Fallback to mock data
+      setEvents(getMockEvents())
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleSignIn = async () => {
+    window.location.href = '/api/auth/signin/google'
+  }
+
+  const getMockEvents = (): CalendarEvent[] => [
+    {
+      id: '1',
+      title: 'Family Dinner',
+      description: 'Weekly family dinner at home',
+      start: new Date(2024, 9, 30, 18, 0),
+      end: new Date(2024, 9, 30, 20, 0),
+      allDay: false,
+      location: 'Home',
+      source: {
+        id: 'local',
+        name: 'Local Calendar',
+        type: 'local',
+        color: '#10b981',
+        enabled: true
+      },
+      status: 'confirmed',
+      visibility: 'private'
+    },
+    {
+      id: '2',
+      title: 'Soccer Practice',
+      description: 'Kids soccer practice at the field',
+      start: new Date(2024, 10, 2, 15, 30),
+      end: new Date(2024, 10, 2, 17, 0),
+      allDay: false,
+      location: 'Community Field',
+      source: {
+        id: 'google',
+        name: 'Google Calendar',
+        type: 'google',
+        color: '#4285f4',
+        enabled: true
+      },
+      status: 'confirmed',
+      visibility: 'private'
+    },
+    {
+      id: '3',
+      title: 'Doctor Appointment',
+      description: 'Annual checkup',
+      start: new Date(2024, 10, 5, 10, 0),
+      end: new Date(2024, 10, 5, 11, 0),
+      allDay: false,
+      location: 'Family Medical Center',
+      source: {
+        id: 'apple',
+        name: 'Apple Calendar',
+        type: 'apple',
+        color: '#007aff',
+        enabled: true
+      },
+      status: 'confirmed',
+      visibility: 'private'
+    }
+  ]
+
+  const handleEventClick = (event: CalendarEvent) => {
+    console.log('Event clicked:', event)
+    // TODO: Open event details modal
+  }
+
+  const handleAddEvent = () => {
+    console.log('Add event clicked')
+    // TODO: Open add event modal
+  }
+
+  const handleSettingsClick = () => {
+    console.log('Settings clicked')
+    // TODO: Open settings modal
+  }
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <header className="bg-white shadow-md border-b border-gray-200 sticky top-0 z-50 backdrop-blur-sm bg-white/95">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-16">
+            <div className="flex items-center space-x-3">
+              <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center">
+                <span className="text-white font-bold text-sm">T</span>
+              </div>
+              <div>
+                <h1 className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+                  TrifSync
+                </h1>
+                <span className="text-xs text-gray-500 hidden sm:inline">Family Calendar</span>
+              </div>
+            </div>
+            <div className="flex items-center space-x-3">
+              <button 
+                onClick={handleSignIn}
+                className="px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-blue-600 to-indigo-600 rounded-lg hover:from-blue-700 hover:to-indigo-700 shadow-md hover:shadow-lg transition-all flex items-center space-x-2"
+              >
+                <svg className="w-4 h-4" viewBox="0 0 24 24">
+                  <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                  <path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                  <path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                  <path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                </svg>
+                <span>Sign In with Google</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      {/* Main Content */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="mb-8">
+          <h2 className="text-3xl font-bold text-gray-900 mb-2">Welcome to TrifSync</h2>
+          <p className="text-lg text-gray-600">
+            Your smart family calendar with AI assistant, multi-service integration, and intelligent notifications.
           </p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+
+        {/* Calendar View */}
+        <CalendarView
+          events={events}
+          loading={loading}
+          onEventClick={handleEventClick}
+          onAddEvent={handleAddEvent}
+          onSettingsClick={handleSettingsClick}
+        />
+
+        {/* Error Message */}
+        {error && (
+          <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+            <div className="flex">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <h3 className="text-sm font-medium text-yellow-800">
+                  Calendar Connection Issue
+                </h3>
+                <div className="mt-2 text-sm text-yellow-700">
+                  <p>{error}</p>
+                  <p className="mt-1">Showing sample data. Please check your Apple Calendar configuration.</p>
+                  <div className="mt-3 space-y-2">
+                    <p className="font-medium">Quick Setup Links:</p>
+                    <ul className="space-y-1">
+                      <li>
+                        <a 
+                          href="http://localhost:3000/api/calendar/debug" 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:text-blue-800 underline"
+                        >
+                          🔍 Check Configuration Status
+                        </a>
+                      </li>
+                      <li>
+                        <a 
+                          href="http://localhost:3000/api/calendar/test-caldav" 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:text-blue-800 underline"
+                        >
+                          🧪 Test CalDAV URLs
+                        </a>
+                      </li>
+                      <li>
+                        <a 
+                          href="https://appleid.apple.com" 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:text-blue-800 underline"
+                        >
+                          🍎 Create App-Specific Password
+                        </a>
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Success Message - Google Calendar Connected */}
+        {!error && !loading && events.length === 0 && (
+          <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
+            <div className="flex">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <h3 className="text-sm font-medium text-green-800">
+                  🎉 Google Calendar Connected Successfully!
+                </h3>
+                <div className="mt-2 text-sm text-green-700">
+                  <p>Your Google Calendar is now synced with TrifSync.</p>
+                  <p className="mt-1">No events found for the current date range. Try:</p>
+                  <ul className="mt-2 list-disc list-inside space-y-1">
+                    <li>Adding events to your Google Calendar</li>
+                    <li>Importing iCal links into Google Calendar (see guide below)</li>
+                    <li>Navigating to a different month</li>
+                    <li>Checking if you have events in other date ranges</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Authentication Required Message */}
+        {error && error.includes('sign in') && (
+          <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+            <div className="flex">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <h3 className="text-sm font-medium text-blue-800">
+                  Sign In Required
+                </h3>
+                <div className="mt-2 text-sm text-blue-700">
+                  <p>Please sign in with Google to view your calendar events.</p>
+                  <div className="mt-3 space-y-2">
+                    <button
+                      onClick={handleSignIn}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium"
+                    >
+                      Sign In with Google
+                    </button>
+                    <div className="text-xs text-blue-600">
+                      <p className="font-medium">Quick Setup Links:</p>
+                      <ul className="mt-1 space-y-1">
+                        <li>
+                          <a 
+                            href="/api/auth/setup-status" 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="underline hover:text-blue-800"
+                          >
+                            🔍 Check Setup Status
+                          </a>
+                        </li>
+                        <li>
+                          <a 
+                            href="https://console.cloud.google.com/apis/credentials" 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="underline hover:text-blue-800"
+                          >
+                            🔑 Get Google OAuth Credentials
+                          </a>
+                        </li>
+                        <li>
+                          <a 
+                            href="https://developers.google.com/oauthplayground/" 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="underline hover:text-blue-800"
+                          >
+                            🧪 Test with OAuth Playground
+                          </a>
+                        </li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Features Preview */}
+        <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-8">
+          <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+            <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mb-4">
+              <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+              </svg>
+            </div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">AI Assistant</h3>
+            <p className="text-gray-600">Ask questions about your schedule, get daily digests, and receive smart notifications.</p>
+          </div>
+
+          <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+            <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mb-4">
+              <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+            </div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Multi-Service Sync</h3>
+            <p className="text-gray-600">Connect Google Calendar, Apple Calendar, and Outlook for unified family scheduling.</p>
+          </div>
+
+          <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+            <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mb-4">
+              <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-5 5v-5zM4 19h6v-6H4v6zM4 5h6V1H4v4zM15 5h5v6h-5V5z" />
+              </svg>
+            </div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Smart Notifications</h3>
+            <p className="text-gray-600">Get departure alerts, weather updates, and personalized reminders for your family.</p>
+          </div>
         </div>
       </main>
     </div>
-  );
+  )
 }
